@@ -1,6 +1,13 @@
 import json
-import sys
+import sys  # Correctly import sys for argv
 from tkinter import *
+from os import path
+from platform import system  # Correctly import platform functions
+from time import time
+from json import load
+from threading import Thread
+from PIL import Image
+from pystray import Icon, MenuItem
 
 from utils.not_windows import NotWindows
 from windows.window import Window
@@ -13,32 +20,26 @@ from utils.version import Version
 from windows.others.new_ver_avalaible import NewVerAvailable
 from hotkeys.hotkeys_manager import HotkeysManager
 from macro import Macro
-from os import path
-from sys import platform, argv
-from pystray import Icon
-from pystray import MenuItem
-from PIL import Image
-from threading import Thread
-from json import load
-from time import time
 
-if platform.lower() == "win32":
+if system().lower() == "windows":
     from tkinter.ttk import *
 
-
 class MainApp(Window):
-    """Main windows of the application"""
+    """Main window of the application"""
 
-    def __init__(self):
+    def __init__(self, macro_file=None):
         super().__init__("PyMacroRecord", 350, 200)
         self.attributes("-topmost", 1)
-        if platform == "win32":
-            self.iconbitmap(resource_path(path.join("assets", "logo.ico")))
+        if system().lower() == "windows":
+            icon_path = resource_path(path.join("assets", "logo.ico"))
+            if isinstance(icon_path, list):
+                icon_path = path.join(*icon_path)
+            self.iconbitmap(icon_path)
 
         self.settings = UserSettings(self)
 
         self.lang = self.settings.get_config()["Language"]
-        with open(resource_path(path.join('langs',  self.lang+'.json')), encoding='utf-8') as f:
+        with open(resource_path(path.join('langs', self.lang + '.json')), encoding='utf-8') as f:
             self.text_content = json.load(f)
 
         self.text_content = self.text_content["content"]
@@ -62,14 +63,17 @@ class MainApp(Window):
         # Play Button
         self.playImg = PhotoImage(file=resource_path(path.join("assets", "button", "play.png")))
 
-        # Import record if opened with .pmr extension
-        if len(argv) > 1:
-            with open(sys.argv[1], 'r') as record:
-                loaded_content = load(record)
-            self.macro.import_record(loaded_content)
-            self.playBtn = Button(self, image=self.playImg, command=self.macro.start_playback)
-            self.macro_recorded = True
-            self.macro_saved = True
+        if macro_file:
+            try:
+                with open(macro_file, 'r') as record:
+                    loaded_content = load(record)
+                self.macro.import_record(loaded_content)
+                self.playBtn = Button(self, image=self.playImg, command=self.macro.start_playback)
+                self.macro_recorded = True
+                self.macro_saved = True
+            except Exception as e:
+                print(f"Failed to load the macro file: {e}")
+                self.playBtn = Button(self, image=self.playImg, state=DISABLED)
         else:
             self.playBtn = Button(self, image=self.playImg, state=DISABLED)
         self.playBtn.pack(side=LEFT, padx=50)
@@ -90,12 +94,12 @@ class MainApp(Window):
         self.bind('<Control-n>', record_management.new_macro)
 
         self.protocol("WM_DELETE_WINDOW", self.quit_software)
-        if platform.lower() != "darwin":
+        if system().lower() != "darwin":
             Thread(target=self.systemTray).start()
 
         self.attributes("-topmost", 0)
 
-        if platform != "win32" and self.settings.first_time:
+        if system() != "Windows" and self.settings.first_time:
             NotWindows(self)
 
         if self.settings.get_config()["Others"]["Check_update"]:
@@ -129,10 +133,10 @@ class MainApp(Window):
             wantToSave = confirm_save(self)
             if wantToSave:
                 RecordFileManagement(self, self.menu).save_macro()
-            elif wantToSave == None:
+            elif wantToSave is None:
                 return
-        if platform.lower() != "darwin":
+        if system().lower() != "darwin":
             self.icon.stop()
-        if platform.lower() == "linux":
+        if system().lower() == "linux":
             self.destroy()
         self.quit()
